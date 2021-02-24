@@ -1,11 +1,9 @@
 // use rand::RngCore;
 use super::torrent::TorrentFile;
-use super::types::{InfoHash, PeerId};
+use super::types::PeerId;
 
 use bytes::Bytes;
-use serde_derive::Serialize;
-use serde_urlencoded::ser::SeqSerializer;
-use serde_urlencoded::Serializer;
+use serde_derive::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, Serialize)]
@@ -20,8 +18,8 @@ pub struct TrackerRequest {
     left: usize,
 }
 
-impl From<&TorrentFile> for TrackerRequest {
-    fn from(torrent: &TorrentFile) -> Self {
+impl TrackerRequest {
+    pub fn new_from_torrent(torrent: &TorrentFile, peer_id: PeerId) -> Self {
         Self {
             announce: torrent.announce.clone(),
             info_hash: torrent
@@ -30,24 +28,16 @@ impl From<&TorrentFile> for TrackerRequest {
                 .iter()
                 .map(|v| format!("%{:02X}", v))
                 .collect::<String>(),
-            peer_id: [
-                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-            ]
-            .iter()
-            .map(|v| format!("%{:02X}", v))
-            .collect::<String>(),
+            peer_id: peer_id
+                .iter()
+                .map(|v| format!("%{:02X}", v))
+                .collect::<String>(),
             port: 6881,
             uploaded: 0,
             downloaded: 0,
             compact: 1,
             left: torrent.info.length,
         }
-    }
-}
-
-impl TrackerRequest {
-    pub fn url_encoded(&self) -> String {
-        serde_urlencoded::to_string(self).expect("wow")
     }
 }
 
@@ -59,7 +49,8 @@ compact = self.compact, downloaded=self.downloaded, info_hash = self.info_hash, 
     }
 }
 
+#[derive(Debug, Deserialize)]
 pub struct TrackerResponse {
     pub interval: u32,
-    pub peers: String,
+    pub peers: Bytes,
 }

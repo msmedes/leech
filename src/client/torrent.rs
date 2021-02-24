@@ -7,8 +7,6 @@ use sha1;
 
 use bytes::Bytes;
 
-// use reqwest;
-
 use std::io::Read;
 use std::{convert::TryInto, fs};
 
@@ -75,7 +73,7 @@ impl From<BencodeTorrent> for TorrentFile {
             info: Info {
                 name: bencode.info.name.clone(),
                 piece_length: bencode.info.piece_length,
-                pieces: bencode.info.pieces.clone(), // considered a partial move without clone
+                pieces: bencode.info.pieces.clone(),
                 length: bencode.info.length.unwrap(),
                 info_hash: bencode.info.hash(),
             },
@@ -101,12 +99,4 @@ impl TorrentFile {
         let torrent = TorrentFile::from(t);
         torrent
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn new_torrentfile() {}
 }
