@@ -1,3 +1,5 @@
+mod bitfield;
+mod handshake;
 mod peer;
 mod torrent;
 mod tracker;
@@ -39,31 +41,29 @@ impl LeechClient {
         }
     }
 
-    fn extract_peers(&mut self, peer_blob: Bytes) {
+    fn set_peers(&mut self, peer_blob: Bytes) {
         let peer_addrs: Vec<PeerAddr> =
             peer_blob.chunks(6).map(|p| p.try_into().unwrap()).collect();
         self.peers = peer_addrs.iter().map(|addr| Peer::from(*addr)).collect();
     }
 
     pub async fn download(&mut self) -> Result<()> {
+        self.poll_tracker().await?;
+        Ok(())
+    }
+    async fn poll_tracker(&mut self) -> Result<()> {
         let req = TrackerRequest::new_from_torrent(&self.torrent_file, self.peer_id);
-        let res = tracker_req(req).await?;
+        let res = reqwest::get(&req.to_string())
+            .await
+            .expect("Request failed");
+        let body = res.bytes().await.expect("could not parse response body");
+        let res = de::from_bytes::<TrackerResponse>(&body)?;
         self.poll_interval = res.interval;
-        self.extract_peers(res.peers);
-        println!("{:?}", self.peers);
+        self.set_peers(res.peers);
         Ok(())
     }
 }
 
 fn generate_peer_id() -> PeerId {
     rand::thread_rng().gen::<PeerId>()
-}
-
-async fn tracker_req(req: TrackerRequest) -> Result<TrackerResponse> {
-    let res = reqwest::get(&req.to_string())
-        .await
-        .expect("Request failed");
-    let body = res.bytes().await.expect("could not parse response body");
-    let tracker_res = de::from_bytes::<TrackerResponse>(&body)?;
-    Ok(tracker_res)
 }

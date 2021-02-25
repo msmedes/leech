@@ -42,6 +42,9 @@ impl TrackerRequest {
 }
 
 impl fmt::Display for TrackerRequest {
+    // I am not proud of this but reqwest and/or rust doesn't want to play nice
+    // when urlencoding the info_hash and peer_id. It's doing something funky
+    // and both are being converted incorrectly.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{announce}?compact={compact}&downloaded={downloaded}&info_hash={info_hash}&peer_id={peer_id}&port={port}&uploaded={uploaded}",
     announce = self.announce,
