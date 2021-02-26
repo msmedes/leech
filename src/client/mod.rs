@@ -49,8 +49,10 @@ impl LeechClient {
 
     pub async fn download(&mut self) -> Result<()> {
         self.poll_tracker().await?;
+        println!("{:?}", self);
         Ok(())
     }
+    
     async fn poll_tracker(&mut self) -> Result<()> {
         let req = TrackerRequest::new_from_torrent(&self.torrent_file, self.peer_id);
         let res = reqwest::get(&req.to_string())

@@ -4,7 +4,9 @@ struct Bitfield {
 
 impl Bitfield {
     pub fn has_piece(&self, index: usize) -> bool {
+        // figure out which byte we need to look inside
         let byte_index = index / 8;
+        // figure out the bit offset inside of that bit
         let offset = index % 8;
         self.bitfield[byte_index] >> (7 - offset) & 1 != 0
     }
