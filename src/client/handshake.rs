@@ -18,6 +18,12 @@ impl Handshake {
     }
 
     pub fn serialize(&self) -> HandshakeMsg {
+        // The handshake structure is as follows:
+        // The length (as a byte) of the pstr.
+        // The pstr, in this case "BitTorrent protocol".
+        // 8 reserved bytes, in this case all 0s
+        // The info_hash, a [u8;20].
+        // The client peer_id, a [u8;20];
         let mut buffer: Vec<u8> = vec![];
         let pstr = "BitTorrent protocol";
         buffer.push(pstr.len() as u8);

@@ -8,15 +8,18 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.38"
-bytes = { version = "1", features = ["serde"] }
 byteorder = "1.4.2"
+bytes = { version = "1", features = ["serde"] }
 futures = "0.3"
+num = "0.3"
+num-derive = "0.3"
+num-traits = "0.2"
 rand = "0.8.3"
 reqwest = "0.11.0"
-serde_bencode = "^0.2.3"
 serde = "^1.0.0"
-serde_derive = "^1.0.0"
+serde_bencode = "^0.2.3"
 serde_bytes = "^0.11.5"
+serde_derive = "^1.0.0"
 serde_urlencoded = "0.7.0"
 sha1 = "^0.6.0"
 tokio = {version = "1.2.0", features = ["full"]}

@@ -1,5 +1,6 @@
 mod bitfield;
 mod handshake;
+mod message;
 mod peer;
 mod torrent;
 mod tracker;
@@ -52,7 +53,7 @@ impl LeechClient {
         println!("{:?}", self);
         Ok(())
     }
-    
+
     async fn poll_tracker(&mut self) -> Result<()> {
         let req = TrackerRequest::new_from_torrent(&self.torrent_file, self.peer_id);
         let res = reqwest::get(&req.to_string())

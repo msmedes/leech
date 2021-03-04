@@ -1,5 +1,7 @@
 extern crate serde_derive;
 use anyhow::Result;
+#[macro_use]
+extern crate num_derive;
 
 mod client;
 use client::LeechClient;

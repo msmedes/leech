@@ -21,7 +21,7 @@ impl From<PeerAddr> for Peer {
     // [192, 0, 2, 123, 26, 225].  The first four bytes are the IP, and the
     // last two are the port address in BigEndian format. To get the port
     // you just squish the two together.
-    // Eg: [26, 225] -> [0x1A, 0xE1] -> 6881
+    // Eg: [26, 225] or [0x1A, 0xE1] -> 6881
     fn from(peer_addr: PeerAddr) -> Self {
         let addr = &peer_addr[0..4];
         let mut port = &peer_addr[4..6];
