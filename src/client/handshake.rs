@@ -1,5 +1,7 @@
 use std::convert::TryInto;
 
+// use tokio::prelude::Read;
+
 use super::types::{HandshakeMsg, InfoHash, PeerId};
 
 struct Handshake {
@@ -20,14 +22,13 @@ impl Handshake {
     pub fn serialize(&self) -> HandshakeMsg {
         // The handshake structure is as follows:
         // The length (as a byte) of the pstr.
-        // The pstr, in this case "BitTorrent protocol".
+        // The pstr, in this case literally "BitTorrent protocol".
         // 8 reserved bytes, in this case all 0s
         // The info_hash, a [u8;20].
         // The client peer_id, a [u8;20];
         let mut buffer: Vec<u8> = vec![];
-        let pstr = "BitTorrent protocol";
-        buffer.push(pstr.len() as u8);
-        buffer.extend(pstr.as_bytes());
+        buffer.push(self.pstr.len() as u8);
+        buffer.extend(self.pstr.as_bytes());
         buffer.extend(&[0; 8]);
         buffer.extend(&self.info_hash[..]);
         buffer.extend(&self.peer_id[..]);
