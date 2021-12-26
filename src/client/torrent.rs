@@ -3,7 +3,6 @@ extern crate serde_bencode;
 use serde_derive::{Deserialize, Serialize};
 extern crate serde_bytes;
 use serde_bencode::de;
-use sha1;
 
 use bytes::Bytes;
 
@@ -91,7 +90,7 @@ impl TorrentFile {
         let mut file = fs::File::open(filename).expect("unable to read file");
         let metadata = fs::metadata(&filename).expect("unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
-        file.read(&mut buffer).expect("buffer overflow");
+        file.read_exact(&mut buffer).expect("buffer overflow");
         let t = match de::from_bytes::<BencodeTorrent>(&buffer) {
             Ok(t) => t,
             Err(e) => panic!("Error: {:?}", e),

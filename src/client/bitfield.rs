@@ -1,4 +1,4 @@
-struct Bitfield {
+pub struct Bitfield {
     bitfield: Vec<u8>,
 }
 
@@ -47,7 +47,7 @@ mod tests {
         assert_eq!(bitfield.bitfield, vec![84, 84]);
 
         bitfield.set_piece(4);
-        assert_eq!(bitfield.has_piece(4), true);
+        assert!(bitfield.has_piece(4));
     }
 
     #[test]

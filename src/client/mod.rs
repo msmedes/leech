@@ -2,6 +2,7 @@ mod bitfield;
 mod handshake;
 mod message;
 mod peer;
+mod peerclient;
 mod torrent;
 mod tracker;
 mod types;
@@ -16,7 +17,6 @@ use std::convert::TryInto;
 use anyhow::Result;
 use bytes::Bytes;
 use rand::Rng;
-use reqwest;
 use serde_bencode::de;
 
 #[derive(Debug)]
@@ -46,16 +46,18 @@ impl LeechClient {
         let peer_addrs: Vec<PeerAddr> =
             peer_blob.chunks(6).map(|p| p.try_into().unwrap()).collect();
         self.peers = peer_addrs.iter().map(|addr| Peer::from(*addr)).collect();
+        // println!("{:?}", self.peers);
     }
 
     pub async fn download(&mut self) -> Result<()> {
         self.poll_tracker().await?;
-        println!("{:?}", self);
+        // println!("{:?}", self);
         Ok(())
     }
 
     async fn poll_tracker(&mut self) -> Result<()> {
         let req = TrackerRequest::new_from_torrent(&self.torrent_file, self.peer_id);
+
         let res = reqwest::get(&req.to_string())
             .await
             .expect("Request failed");

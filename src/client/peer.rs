@@ -2,12 +2,13 @@ use super::types::PeerAddr;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Peer {
-    pub addr: Ipv4Addr,
-    pub port: String,
+    pub addr: IpAddr,
+    pub port: u16,
+    pub socket_addr: SocketAddr,
 }
 
 impl fmt::Display for Peer {
@@ -28,13 +29,15 @@ impl From<PeerAddr> for Peer {
 
         // There's no way I could find to spread the slice to the function arguments,
         // but we're only using IPv4 so it should be fine.
-        let addr = Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3]);
-        let port = port
-            .read_u16::<BigEndian>()
-            .expect("port parse failed")
-            .to_string();
+        let addr = IpAddr::V4(Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3]));
+        let port = port.read_u16::<BigEndian>().expect("port parse failed");
+        let socket_addr = SocketAddr::new(addr, port);
 
-        Peer { addr, port }
+        Peer {
+            addr,
+            port,
+            socket_addr,
+        }
     }
 }
 
@@ -45,9 +48,11 @@ mod tests {
     fn parse_bytes() {
         let addr: PeerAddr = [192, 0, 2, 123, 26, 225];
         let peer = Peer::from(addr);
+        let addr = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 123));
         let expected = Peer {
-            addr: Ipv4Addr::new(192, 0, 2, 123),
-            port: "6881".to_string(),
+            addr,
+            port: 6881,
+            socket_addr: SocketAddr::new(addr, 6881),
         };
         assert_eq!(peer, expected);
     }

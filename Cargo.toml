@@ -7,10 +7,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.38"
+anyhow = "1.0.52"
 byteorder = "1.4.2"
 bytes = { version = "1", features = ["serde"] }
 futures = "0.3"
+hyper = { version = "0.14", features = ["full"] }
 num = "0.3"
 num-derive = "0.3"
 num-traits = "0.2"
