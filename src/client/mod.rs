@@ -95,10 +95,12 @@ impl LeechClient {
         for task in pieces_in_progress_tasks {
             let peer = task.await;
             if peer.is_ok() {
-                pieces_in_progress.push(peer.unwrap());
+                let peer = peer.unwrap();
+                println!("{:?}", peer);
+                pieces_in_progress.push(peer);
             }
         }
-        dbg!(pieces_in_progress);
+        // dbg!(pieces_in_progress);
         Ok(())
     }
 

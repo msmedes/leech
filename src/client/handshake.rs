@@ -68,7 +68,7 @@ impl Decoder for HandshakeCodec {
         // `get_*` int extractors will consume the buffer, which we don't
         // want to do until we know that the full message, so we create a
         // temp buffer.
-        let mut temp_buf = Cursor::new(buf);
+        let mut temp_buf = Cursor::new(&buf);
         let pstr_len = temp_buf.get_u8() as usize;
         if pstr_len != PROTOCOL_STRING.as_bytes().len() {
             return Err(anyhow!(
