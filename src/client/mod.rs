@@ -1,4 +1,4 @@
-mod bitfield;
+mod block;
 mod handshake;
 mod message;
 mod peer;
@@ -8,6 +8,7 @@ mod tracker;
 mod types;
 
 use peer::Peer;
+use peerclient::PeerClient;
 use torrent::TorrentFile;
 use tracker::{TrackerRequest, TrackerResponse};
 use types::{InfoHash, PeerAddr, PeerId, Peers};
@@ -15,7 +16,7 @@ use types::{InfoHash, PeerAddr, PeerId, Peers};
 use std::convert::TryInto;
 
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use rand::Rng;
 use serde_bencode::de;
 
@@ -27,6 +28,34 @@ pub struct LeechClient {
     info_hash: InfoHash,
     peer_id: PeerId,
     poll_interval: u32,
+}
+
+#[derive(Debug)]
+struct PieceInProgress {
+    index: usize,
+    client: PeerClient,
+    buffer: BytesMut,
+    downloaded: usize,
+    requested: usize,
+    backlog: usize,
+}
+
+impl PieceInProgress {
+    async fn from_peer(peer: Peer, info_hash: InfoHash, peer_id: PeerId) -> Result<Self> {
+        let client = PeerClient::new(peer, info_hash, peer_id).await?;
+        let buffer = BytesMut::new();
+        let downloaded = 0;
+        let requested = 0;
+        let backlog = 0;
+        Ok(PieceInProgress {
+            index: 0,
+            client,
+            buffer,
+            downloaded,
+            requested,
+            backlog,
+        })
+    }
 }
 
 impl LeechClient {
@@ -51,7 +80,25 @@ impl LeechClient {
 
     pub async fn download(&mut self) -> Result<()> {
         self.poll_tracker().await?;
-        // println!("{:?}", self);
+        let pieces_in_progress_tasks: Vec<_> = self
+            .peers
+            .iter()
+            .map(|peer| {
+                tokio::spawn(PieceInProgress::from_peer(
+                    *peer,
+                    self.info_hash,
+                    self.peer_id,
+                ))
+            })
+            .collect();
+        let mut pieces_in_progress = Vec::new();
+        for task in pieces_in_progress_tasks {
+            let peer = task.await;
+            if peer.is_ok() {
+                pieces_in_progress.push(peer.unwrap());
+            }
+        }
+        dbg!(pieces_in_progress);
         Ok(())
     }
 

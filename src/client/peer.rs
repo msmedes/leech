@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Peer {
     pub addr: IpAddr,
     pub port: u16,

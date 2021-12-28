@@ -1,6 +1,9 @@
-use super::peer::Peer;
+use bitvec::prelude::{BitVec, Msb0};
 use bytes::Bytes;
 
+use super::peer::Peer;
+
+pub type Bitfield = BitVec<Msb0, u8>;
 pub type InfoHash = [u8; 20];
 pub type HandshakeMsg = Bytes;
 pub type PeerAddr = [u8; 6];

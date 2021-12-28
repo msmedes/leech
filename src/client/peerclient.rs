@@ -7,39 +7,40 @@ use super::peer::Peer;
 use super::types::{InfoHash, PeerId};
 
 use anyhow::{anyhow, Result};
-use bytes::{BufMut, Bytes, BytesMut};
-// use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio_util::{Decoder, Encoder, Framed};
 
-struct PeerClient {
+#[derive(Debug)]
+pub struct PeerClient {
     peer: Peer,
     connection: TcpStream,
     bitfield: Bitfield,
-    infoHash: InfoHash,
-    peerId: PeerId,
+    info_hash: InfoHash,
+    peer_id: PeerId,
     choked: bool,
 }
 
 impl PeerClient {
-    async fn new(peer: Peer, infoHash: InfoHash, peerId: PeerId) -> Result<Self> {
+    pub async fn new(peer: Peer, info_hash: InfoHash, peer_id: PeerId) -> Result<Self> {
         let mut connection = TcpStream::connect(peer.socket_addr).await?;
 
-        let handshake = initial_handshake(&mut connection, infoHash, peerId).await?;
+        let _ = initial_handshake(&mut connection, info_hash, peer_id).await?;
 
-        let bitfield = receive_bitfield(&mut connection).await;
-
-        if bitfield.is_err() {
-            connection.shutdown().await?;
-            return bitfield?;
-        }
+        let bitfield = match receive_bitfield(&mut connection).await {
+            Ok(bitfield) => bitfield,
+            Err(_) => {
+                connection.shutdown().await?;
+                return Err(anyhow!("Could not receive bitfield"));
+            }
+        };
 
         Ok(PeerClient {
             peer,
             connection,
             bitfield,
-            infoHash,
-            peerId,
+            info_hash,
+            peer_id,
             choked: true,
         })
     }
@@ -51,7 +52,12 @@ async fn initial_handshake(
     info_hash: InfoHash,
 ) -> Result<Handshake> {
     let handshake = Handshake::new(peer_id, info_hash);
-    let request = connection.write_all(&handshake.serialize()).await?;
+    // dbg!(&handshake);
+
+    let (mut rd, mut wr) = connection.split();
+    tokio::spawn(async move {
+        let _ = wr.write_all(&handshake.serialize()).await;
+    });
 
     let handshake_res = Handshake::read_from_stream(connection).await?;
     if handshake_res.info_hash != info_hash {
