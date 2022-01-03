@@ -15,7 +15,7 @@ use torrent::TorrentFile;
 use tracker::{TrackerRequest, TrackerResponse};
 use types::{InfoHash, PeerAddr, PeerId, Peers};
 
-use std::convert::TryInto;
+use std::{cell::Cell, convert::TryInto, sync::Arc};
 
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
@@ -29,7 +29,7 @@ use tokio::{
 
 #[derive(Debug)]
 pub struct LeechClient {
-    peers: Peers,
+    peers: Cell<Peers>,
     filename: String,
     pub torrent_file: TorrentFile,
     info_hash: InfoHash,
@@ -78,7 +78,7 @@ impl LeechClient {
             filename: String::from(filename),
             info_hash: torrent_file.info.info_hash,
             torrent_file,
-            peers: Vec::<Peer>::new(),
+            peers: Cell::new(Vec::<Peer>::new()),
             peer_id: generate_peer_id(),
             poll_interval: 0,
         }
@@ -87,7 +87,7 @@ impl LeechClient {
     fn set_peers(&mut self, peer_blob: Bytes) {
         let peer_addrs: Vec<PeerAddr> =
             peer_blob.chunks(6).map(|p| p.try_into().unwrap()).collect();
-        self.peers = peer_addrs.iter().map(|addr| Peer::from(*addr)).collect();
+        self.peers = Cell::new(peer_addrs.iter().map(|addr| Peer::from(*addr)).collect());
     }
 
     async fn handle_message(
@@ -155,8 +155,9 @@ impl LeechClient {
         Ok(piece_progress.buffer)
     }
 
-    pub async fn download(&mut self) -> Result<()> {
-        self.poll_tracker().await?;
+    pub async fn download(self: Arc<Self>) -> Result<()> {
+        let cloned = self.clone();
+        cloned.poll_tracker().await?;
 
         let (work_tx, mut work_rx) = channel::<PieceWork>(self.torrent_file.piece_hashes.len());
         let (result_tx, mut result_rx) = unbounded_channel::<PieceResult>();
@@ -170,7 +171,7 @@ impl LeechClient {
             work_tx.send(work).await?;
         }
 
-        for peer in &self.peers {
+        for peer in &self.peers.get() {
             task::spawn(async {
                 LeechClient::start_download_worker(
                     peer,
