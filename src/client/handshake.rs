@@ -21,7 +21,7 @@ pub struct Handshake {
 pub const PROTOCOL_STRING: &str = "BitTorrent protocol";
 
 impl Handshake {
-    pub fn new(peer_id: PeerId, info_hash: InfoHash) -> Self {
+    pub fn new(info_hash: InfoHash, peer_id: PeerId) -> Self {
         let mut pstr = [0; 19];
         pstr.copy_from_slice(PROTOCOL_STRING.as_bytes());
         Handshake {

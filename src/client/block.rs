@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use bytes::{BufMut, BytesMut};
 
+#[derive(Debug)]
 pub struct BlockInfo {
     pub piece_index: usize,
     pub block_offset: u32,

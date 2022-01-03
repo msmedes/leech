@@ -1,14 +1,15 @@
-use super::types::PeerAddr;
+use super::types::{Bitfield, PeerAddr};
 
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Peer {
     pub addr: IpAddr,
     pub port: u16,
     pub socket_addr: SocketAddr,
+    pub piece_count: usize,
 }
 
 impl fmt::Display for Peer {
@@ -37,6 +38,7 @@ impl From<PeerAddr> for Peer {
             addr,
             port,
             socket_addr,
+            piece_count: 0,
         }
     }
 }

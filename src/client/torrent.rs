@@ -61,14 +61,15 @@ pub struct Info {
 pub struct TorrentFile {
     pub info: Info,
     pub announce: String,
-    pub pieces_hashes: PieceHashes,
+    pub piece_hashes: PieceHashes,
+    pub piece_count: usize,
 }
 
 impl From<BencodeTorrent> for TorrentFile {
     fn from(bencode: BencodeTorrent) -> Self {
         TorrentFile {
             announce: bencode.announce.unwrap(),
-            pieces_hashes: bencode.info.split_piece_hashes(),
+            piece_hashes: bencode.info.split_piece_hashes(),
             info: Info {
                 name: bencode.info.name.clone(),
                 piece_length: bencode.info.piece_length,
@@ -76,6 +77,7 @@ impl From<BencodeTorrent> for TorrentFile {
                 length: bencode.info.length.unwrap(),
                 info_hash: bencode.info.hash(),
             },
+            piece_count: bencode.info.pieces.len() / 20,
         }
     }
 }
@@ -95,7 +97,21 @@ impl TorrentFile {
             Ok(t) => t,
             Err(e) => panic!("Error: {:?}", e),
         };
-        let torrent = TorrentFile::from(t);
-        torrent
+        TorrentFile::from(t)
+    }
+
+    pub fn calculate_bounds_for_piece(&self, index: usize) -> (usize, usize) {
+        let start = index * self.info.piece_length;
+        let end = start + self.info.piece_length;
+        if end > self.info.length {
+            (start, self.info.length)
+        } else {
+            (start, end)
+        }
+    }
+
+    pub fn calculate_piece_size(&self, index: usize) -> usize {
+        let (start, finish) = self.calculate_bounds_for_piece(index);
+        finish - start
     }
 }

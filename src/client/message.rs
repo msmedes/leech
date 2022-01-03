@@ -7,7 +7,7 @@ use tokio_util::codec::{Decoder, Encoder};
 use super::block::BlockInfo;
 use super::types::{Bitfield, PieceHash};
 
-// #[derive(FromPrimitive, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 #[repr(u8)]
 pub enum MessageId {
     // Chokes the reciever
@@ -49,6 +49,7 @@ impl TryFrom<u8> for MessageId {
     }
 }
 
+#[derive(Debug)]
 pub enum Message {
     KeepAlive,
     Bitfield(Bitfield),
@@ -208,7 +209,7 @@ impl Decoder for PeerCodec {
                 Message::Block {
                     piece_index,
                     offset,
-                    block_data: data.into(),
+                    block_data: data,
                 }
             }
             MessageId::Cancel => {

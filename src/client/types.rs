@@ -10,4 +10,5 @@ pub type PeerAddr = [u8; 6];
 pub type PeerId = [u8; 20];
 pub type PieceHash = [u8; 20];
 pub type PieceHashes = Vec<PieceHash>;
+pub type PieceIndex = usize;
 pub type Peers = Vec<Peer>;
