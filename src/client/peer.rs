@@ -1,10 +1,10 @@
-use super::types::{Bitfield, PeerAddr};
+use super::types::PeerAddr;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Peer {
     pub addr: IpAddr,
     pub port: u16,
@@ -40,29 +40,5 @@ impl From<PeerAddr> for Peer {
             socket_addr,
             piece_count: 0,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn parse_bytes() {
-        let addr: PeerAddr = [192, 0, 2, 123, 26, 225];
-        let peer = Peer::from(addr);
-        let addr = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 123));
-        let expected = Peer {
-            addr,
-            port: 6881,
-            socket_addr: SocketAddr::new(addr, 6881),
-        };
-        assert_eq!(peer, expected);
-    }
-
-    #[test]
-    fn format() {
-        let addr: PeerAddr = [192, 0, 2, 123, 26, 225];
-        let peer = Peer::from(addr);
-        assert_eq!(peer.to_string(), "192.0.2.123:6881");
     }
 }

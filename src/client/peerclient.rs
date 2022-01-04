@@ -1,4 +1,5 @@
 use futures::{SinkExt, StreamExt};
+use std::time::Duration;
 
 use super::handshake::{Handshake, HandshakeCodec};
 use super::message::Message;
@@ -12,7 +13,7 @@ use tokio_util::codec::Framed;
 
 #[derive(Debug)]
 pub struct PeerClient {
-    peer: Peer,
+    pub peer: Peer,
     pub bitfield: Bitfield,
     pub connection: TcpStream,
     info_hash: InfoHash,
@@ -51,6 +52,9 @@ impl PeerClient {
             let msg = socket.next().await;
             if let Some(Ok(msg)) = msg {
                 return Ok(msg);
+            }
+            if let Some(Err(e)) = msg {
+                return Err(anyhow!("{}", e));
             }
         }
     }

@@ -15,21 +15,22 @@ use torrent::TorrentFile;
 use tracker::{TrackerRequest, TrackerResponse};
 use types::{InfoHash, PeerAddr, PeerId, Peers};
 
-use std::{cell::Cell, convert::TryInto, sync::Arc};
+use std::{convert::TryInto, sync::Arc};
 
 use anyhow::Result;
-use bytes::{Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use rand::Rng;
 use serde_bencode::de;
 use sha1::{Digest, Sha1};
-use tokio::{
-    sync::mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedSender},
-    task,
+use tokio::sync::{
+    broadcast,
+    mpsc::{unbounded_channel, UnboundedSender},
+    Mutex,
 };
 
 #[derive(Debug)]
 pub struct LeechClient {
-    peers: Cell<Peers>,
+    peers: Peers,
     filename: String,
     pub torrent_file: TorrentFile,
     info_hash: InfoHash,
@@ -54,10 +55,8 @@ struct PieceWork {
 }
 
 impl PieceWork {
-    fn check_integrity(&self, buffer: Bytes) -> bool {
-        let mut hasher = Sha1::new();
-        hasher.update(buffer.as_ref());
-        let hash = hasher.finalize();
+    fn check_integrity(&self, buffer: &BytesMut) -> bool {
+        let hash = Sha1::from(buffer.as_ref()).digest().bytes();
         hash.as_slice() == self.hash
     }
 }
@@ -72,22 +71,24 @@ const MAX_BACKLOG: usize = 10;
 const MAX_REQUEST_SIZE: usize = 16384;
 
 impl LeechClient {
-    pub fn new(filename: &str) -> Self {
+    pub async fn new(filename: &str) -> Result<Self> {
         let torrent_file = TorrentFile::new(filename);
-        LeechClient {
+        let mut client = LeechClient {
             filename: String::from(filename),
             info_hash: torrent_file.info.info_hash,
             torrent_file,
-            peers: Cell::new(Vec::<Peer>::new()),
+            peers: Vec::<Peer>::new(),
             peer_id: generate_peer_id(),
             poll_interval: 0,
-        }
+        };
+        client.poll_tracker().await?;
+        Ok(client)
     }
 
     fn set_peers(&mut self, peer_blob: Bytes) {
         let peer_addrs: Vec<PeerAddr> =
             peer_blob.chunks(6).map(|p| p.try_into().unwrap()).collect();
-        self.peers = Cell::new(peer_addrs.iter().map(|addr| Peer::from(*addr)).collect());
+        self.peers = peer_addrs.iter().map(|addr| Peer::from(*addr)).collect();
     }
 
     async fn handle_message(
@@ -104,6 +105,7 @@ impl LeechClient {
                 offset,
                 block_data,
             } => {
+                println!("block data length: {}", block_data.len());
                 piece_progress.buffer[offset as usize..(offset as usize + block_data.len())]
                     .copy_from_slice(block_data.as_ref());
                 piece_progress.downloaded += block_data.len();
@@ -111,7 +113,10 @@ impl LeechClient {
             }
             _ => {}
         }
-
+        println!(
+            "message handled? {} {}",
+            piece_progress.downloaded, piece_progress.backlog
+        );
         Ok(())
     }
 
@@ -119,9 +124,10 @@ impl LeechClient {
         client: &mut PeerClient,
         piece_work: PieceWork,
     ) -> Result<BytesMut> {
+        println!("PIECE_WORK LENGTH: {}", piece_work.length);
         let mut piece_progress = PieceInProgress {
             index: piece_work.index,
-            buffer: BytesMut::new(),
+            buffer: BytesMut::from(&vec![0_u8; piece_work.length][..]),
             downloaded: 0,
             requested: 0,
             backlog: 0,
@@ -147,20 +153,61 @@ impl LeechClient {
 
                     piece_progress.backlog += 1;
                     piece_progress.requested += block_size;
+                    println!(
+                        "piece_progress requested: {} backlog: {}",
+                        piece_progress.requested, piece_progress.backlog
+                    );
                 }
             }
+            println!("awaiting message from peer {}", client.peer.addr);
             LeechClient::handle_message(&mut piece_progress, client).await?;
+            println!(
+                "handled message from peer, {} {}",
+                piece_progress.downloaded, piece_work.length
+            );
         }
-
+        println!("we have a piece progress buffer");
         Ok(piece_progress.buffer)
     }
 
-    pub async fn download(self: Arc<Self>) -> Result<()> {
-        let cloned = self.clone();
-        cloned.poll_tracker().await?;
+    pub async fn download(self) -> Result<()> {
+        // let clone = Arc::new(self);
+        println!("downloading...");
+        self.initialize_download().await?;
+        Ok(())
+    }
 
-        let (work_tx, mut work_rx) = channel::<PieceWork>(self.torrent_file.piece_hashes.len());
+    pub async fn initialize_download(self) -> Result<()> {
+        // let clone = self.clone();
+        let (work_tx, mut work_rx) =
+            broadcast::channel::<PieceWork>(self.torrent_file.piece_hashes.len());
         let (result_tx, mut result_rx) = unbounded_channel::<PieceResult>();
+
+        let work_rx = Arc::new(Mutex::new(work_rx));
+
+        let max_peers = std::cmp::min(self.peers.len(), 50);
+        let mut peer_count = 0;
+        for peer in self.peers {
+            peer_count += 1;
+
+            let worker_tx = work_tx.clone();
+            let results_tx = result_tx.clone();
+            let mut work_rx = work_rx.clone();
+            if peer_count < max_peers {
+                tokio::spawn(async move {
+                    println!("spawning worker for peer {:?}", peer);
+                    LeechClient::start_download_worker(
+                        peer,
+                        &mut work_rx,
+                        worker_tx,
+                        results_tx,
+                        self.info_hash,
+                        self.peer_id,
+                    )
+                    .await;
+                });
+            }
+        }
 
         for (index, hash) in self.torrent_file.piece_hashes.iter().enumerate() {
             let work = PieceWork {
@@ -168,26 +215,12 @@ impl LeechClient {
                 hash: *hash,
                 length: self.torrent_file.calculate_piece_size(index),
             };
-            work_tx.send(work).await?;
-        }
-
-        for peer in &self.peers.get() {
-            task::spawn(async {
-                LeechClient::start_download_worker(
-                    peer,
-                    &mut work_rx,
-                    work_tx,
-                    result_tx,
-                    self.info_hash,
-                    self.peer_id,
-                )
-            })
-            .await;
+            work_tx.send(work)?;
         }
 
         drop(work_tx);
 
-        let mut buf = BytesMut::new();
+        let mut buf = BytesMut::from(&vec![0_u8; self.torrent_file.info.length][..]);
         let mut done = 0;
         while let Some(result) = result_rx.recv().await {
             let (start, end) = self.torrent_file.calculate_bounds_for_piece(result.index);
@@ -205,42 +238,57 @@ impl LeechClient {
     }
 
     async fn start_download_worker(
-        peer: &Peer,
-        work_rx: &mut Receiver<PieceWork>,
-        work_tx: Sender<PieceWork>,
+        peer: Peer,
+        work_rx: &mut Arc<Mutex<broadcast::Receiver<PieceWork>>>,
+        work_tx: broadcast::Sender<PieceWork>,
         result_tx: UnboundedSender<PieceResult>,
         info_hash: InfoHash,
         peer_id: PeerId,
     ) -> Result<()> {
-        let mut peer_client = PeerClient::new(peer.clone(), info_hash, peer_id).await?;
+        let mut peer_client = PeerClient::new(peer, info_hash, peer_id).await?;
 
         let _ = peer_client.send_message(Message::Unchoke).await;
         let _ = peer_client.send_message(Message::Interested).await;
 
-        while let Some(piece_work) = work_rx.recv().await {
-            if peer_client.bitfield.get(piece_work.index) == None {
-                work_tx.send(piece_work).await?;
-            }
-
-            let buf = match LeechClient::attempt_piece_download(&mut peer_client, piece_work).await
-            {
-                Ok(buf) => buf,
-                Err(_) => {
-                    work_tx.send(piece_work).await?;
+        loop {
+            let piece_work = work_rx.lock().await.recv().await;
+            if let Ok(piece_work) = piece_work {
+                if peer_client.bitfield.get(piece_work.index) == None {
+                    work_tx.send(piece_work)?;
                     continue;
                 }
-            };
 
-            peer_client
-                .send_message(Message::Have {
-                    piece_index: piece_work.index,
-                })
-                .await?;
+                let buf =
+                    match LeechClient::attempt_piece_download(&mut peer_client, piece_work).await {
+                        Ok(buf) => buf,
+                        Err(e) => {
+                            println!("attempt piece download failed: {:?}", e);
+                            work_tx.send(piece_work)?;
+                            continue;
+                        }
+                    };
 
-            result_tx.send(PieceResult {
-                index: piece_work.index,
-                buf,
-            })?;
+                if !piece_work.check_integrity(&buf) {
+                    println!("integrity check failed");
+                    work_tx.send(piece_work)?;
+                    continue;
+                }
+
+                println!("we got a buffer???????");
+
+                peer_client
+                    .send_message(Message::Have {
+                        piece_index: piece_work.index,
+                    })
+                    .await?;
+
+                result_tx.send(PieceResult {
+                    index: piece_work.index,
+                    buf,
+                })?;
+            } else {
+                break;
+            }
         }
         Ok(())
     }
